@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E-Auto Ladezeit- &amp; Kostenrechner</title>
+<style>
+  :root{
+    --bg:#0F1512;
+    --bg-panel:#161F1A;
+    --line:#2A362F;
+    --line-soft:#212B25;
+    --text:#EDEFE9;
+    --text-dim:#9AA69C;
+    --accent:#6FCF97;
+    --amber:#E0B15C;
+    --radius:2px;
+    --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg:#F3F5F1; --bg-panel:#FFFFFF; --line:#D6DCD3; --line-soft:#E4E8E1;
+      --text:#141914; --text-dim:#5C665D; --accent:#1F7A4D; --amber:#9C6A17;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#F3F5F1; --bg-panel:#FFFFFF; --line:#D6DCD3; --line-soft:#E4E8E1;
+    --text:#141914; --text-dim:#5C665D; --accent:#1F7A4D; --amber:#9C6A17;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg); color:var(--text); font-family:var(--sans);
+    min-height:100vh; padding:32px 16px 64px; display:flex; justify-content:center;
+  }
+  .wrap{ width:100%; max-width:640px; }
+
+  .masthead{
+    display:flex; justify-content:space-between; align-items:baseline;
+    border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:22px;
+  }
+  .masthead h1{ font-size:19px; font-weight:600; letter-spacing:0.01em; margin:0; }
+  .masthead .sub{ font-family:var(--mono); font-size:11px; color:var(--text-dim); text-align:right; line-height:1.5; }
+
+  .toggle{
+    display:grid; grid-template-columns:1fr 1fr; gap:0;
+    border:1px solid var(--line); border-radius:var(--radius); overflow:hidden;
+    margin-bottom:20px;
+  }
+  .toggle button{
+    background:var(--bg-panel); color:var(--text-dim); border:none;
+    font-family:var(--sans); font-size:13.5px; font-weight:600; padding:12px 0;
+    cursor:pointer; letter-spacing:0.01em;
+  }
+  .toggle button + button{ border-left:1px solid var(--line); }
+  .toggle button.active{ background:var(--accent); color:#0B140F; }
+
+  .panel{
+    background:var(--bg-panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:22px 22px 24px; margin-bottom:20px;
+  }
+
+  .field{ margin-bottom:18px; }
+  .field:last-child{ margin-bottom:0; }
+  .field label{ display:block; font-size:12.5px; color:var(--text-dim); margin-bottom:7px; }
+
+  select, input[type="number"]{
+    width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text);
+    font-family:var(--sans); font-size:14.5px; padding:10px 12px; border-radius:var(--radius);
+    appearance:none; -webkit-appearance:none;
+  }
+  select{
+    background-image: linear-gradient(45deg, transparent 50%, var(--text-dim) 50%), linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+    background-position: calc(100% - 18px) center, calc(100% - 13px) center;
+    background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; cursor:pointer;
+  }
+  select:focus, input:focus{ outline:2px solid var(--accent); outline-offset:1px; }
+
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+
+  .hint{ font-family:var(--mono); font-size:11px; color:var(--text-dim); margin-top:6px; }
+  .capped{ color:var(--amber); }
+
+  .divider{ border:none; border-top:1px solid var(--line-soft); margin:20px 0; }
+
+  .summary{
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-family:var(--mono); font-size:12px; color:var(--text-dim);
+  }
+  .summary strong{ color:var(--text); font-weight:600; }
+
+  table{ width:100%; border-collapse:collapse; margin-top:8px; }
+  th{
+    text-align:left; font-size:11px; font-weight:500; color:var(--text-dim);
+    padding:0 4px 10px; border-bottom:1px solid var(--line);
+  }
+  th.num, td.num{ text-align:right; }
+  td{ padding:12px 4px; border-bottom:1px solid var(--line-soft); font-size:14.5px; }
+  tr:last-child td{ border-bottom:none; }
+  td.target{ font-family:var(--mono); color:var(--text-dim); width:52px; }
+  td.duration{ font-family:var(--mono); font-weight:600; font-size:15.5px; }
+  td.energy{ font-family:var(--mono); color:var(--text-dim); font-size:12.5px; }
+  td.cost{ font-family:var(--mono); color:var(--text); font-size:13.5px; }
+  td.cost .block{ display:block; color:var(--amber); font-size:10.5px; margin-top:2px; }
+  .bar-track{ height:4px; background:var(--line-soft); border-radius:2px; margin-top:6px; overflow:hidden; }
+  .bar-fill{ height:100%; background:var(--accent); border-radius:2px; }
+  tr.done td{ color:var(--text-dim); }
+  tr.done .bar-fill{ background:var(--line); }
+
+  .note{ font-size:11.5px; color:var(--text-dim); line-height:1.6; margin-top:18px; }
+
+  @media (max-width:420px){
+    .row2{ grid-template-columns:1fr; }
+    .masthead{ flex-direction:column; gap:6px; }
+    .masthead .sub{ text-align:left; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <h1>E-Auto · Ladezeit &amp; Kosten</h1>
+    <div class="sub" id="modeLabel">AC-Laden<br>Wallbox</div>
+  </div>
+
+  <div class="toggle">
+    <button id="btnAC" class="active">AC · Wallbox</button>
+    <button id="btnDC">DC · Schnellladen</button>
+  </div>
+
+  <div class="panel">
+    <div class="field">
+      <label for="vehicle">Fahrzeugmodell</label>
+      <select id="vehicle">
+        <optgroup label="Leapmotor B10">
+          <option value="b10_sr">B10 Standard Range — 56,2 kWh (nutzbar 55,0 kWh)</option>
+          <option value="b10_lr" selected>B10 Long Range — 67,1 kWh (nutzbar 65,0 kWh)</option>
+        </optgroup>
+        <optgroup label="Cupra Raval">
+          <option value="raval_85">Raval 85 kW — 37 kWh nutzbar (LFP)</option>
+          <option value="raval_99">Raval Plus 99 kW — 37 kWh nutzbar (LFP)</option>
+          <option value="raval_52">Raval Endurance 155 kW / VZ 166 kW — 52 kWh nutzbar (NMC)</option>
+        </optgroup>
+        <optgroup label="Sonstige">
+          <option value="custom">Eigenes Fahrzeug (Werte selbst eingeben)</option>
+        </optgroup>
+      </select>
+      <div class="hint" id="vehNote"></div>
+    </div>
+
+    <div class="field" id="customField" style="display:none;">
+      <div class="row2" style="grid-template-columns:1fr 1fr 1fr;">
+        <div>
+          <label for="customCap">Nutzbar (kWh)</label>
+          <input type="number" id="customCap" min="5" max="250" step="0.1" value="60">
+        </div>
+        <div>
+          <label for="customAC">AC max. (kW)</label>
+          <input type="number" id="customAC" min="1" max="43" step="0.1" value="11">
+        </div>
+        <div>
+          <label for="customDC">DC max. (kW)</label>
+          <input type="number" id="customDC" min="20" max="400" step="1" value="100">
+        </div>
+      </div>
+      <div class="hint">Für eigene Fahrzeuge wird eine typische Ladekurve (Spitze bei 10–30 %, danach abfallend) auf deine DC-Maximalleistung skaliert.</div>
+    </div>
+
+    <div class="field" id="acField">
+      <label for="wallbox">Maximaler Ladestrom der Ladesäule</label>
+      <select id="wallbox">
+        <option value="1.4">6 A · 1-phasig (≈1,4 kW)</option>
+        <option value="1.8">8 A · 1-phasig (≈1,8 kW)</option>
+        <option value="2.3">10 A · 1-phasig (≈2,3 kW)</option>
+        <option value="3.0">13 A · 1-phasig (≈3,0 kW)</option>
+        <option value="3.7">16 A · 1-phasig (≈3,7 kW)</option>
+        <option value="4.1">6 A · 3-phasig (≈4,1 kW)</option>
+        <option value="6.9">10 A · 3-phasig (≈6,9 kW)</option>
+        <option value="11" selected>16 A · 3-phasig (≈11 kW)</option>
+        <option value="13.8">20 A · 3-phasig (≈13,8 kW)</option>
+        <option value="22">32 A · 3-phasig (≈22 kW)</option>
+      </select>
+      <div class="hint" id="capHintAC"></div>
+    </div>
+
+    <div class="field" id="dcField" style="display:none;">
+      <label for="dcStation">Maximale Ladeleistung der Schnellladesäule</label>
+      <select id="dcStation">
+        <option value="50">50 kW</option>
+        <option value="75">75 kW</option>
+        <option value="100">100 kW</option>
+        <option value="150">150 kW</option>
+        <option value="175" selected>175 kW / HPC</option>
+        <option value="300">300 kW</option>
+        <option value="350">350 kW</option>
+      </select>
+      <div class="hint" id="capHintDC"></div>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label for="soc">Akku aktuell (%)</label>
+        <input type="number" id="soc" min="0" max="100" step="1" value="30">
+      </div>
+      <div class="field">
+        <label for="eff">Ladeverluste (%)</label>
+        <input type="number" id="eff" min="0" max="30" step="1" value="8">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="field">
+      <label for="price">Preis pro kWh (ct)</label>
+      <input type="number" id="price" min="0" step="1" value="45">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="baseFee">Grundgebühr / Startpreis (€)</label>
+        <input type="number" id="baseFee" min="0" step="0.01" value="0">
+      </div>
+      <div class="field">
+        <label for="blockFee">Blockiergebühr (ct/min)</label>
+        <input type="number" id="blockFee" min="0" step="1" value="0">
+      </div>
+    </div>
+    <div class="field" id="blockFreeField">
+      <label for="blockFree">Blockiergebühr ab Minute</label>
+      <input type="number" id="blockFree" min="0" step="1" value="60">
+      <div class="hint">Viele DC-Schnelllader berechnen eine Blockiergebühr erst, wenn das Fahrzeug länger als eine Freizeit angeschlossen bleibt.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="summary" id="summaryLine">
+      <span id="summaryLabel">Effektive Ladeleistung</span>
+      <strong id="effPower">–</strong>
+    </div>
+    <hr class="divider">
+    <table>
+      <thead>
+        <tr><th>Ziel</th><th>Energie</th><th class="num">Ladedauer</th><th class="num">Kosten</th></tr>
+      </thead>
+      <tbody id="resultBody"></tbody>
+    </table>
+  </div>
+
+  <div class="note" id="note"></div>
+
+</div>
+
+<script>
+  // Fahrzeugdatenbank: cap = nutzbare kWh, ac = max. AC-Ladeleistung (kW),
+  // curve = DC-Ladekurve [SoC %, kW]
+  const VEHICLES = {
+    b10_sr: {
+      name: 'Leapmotor B10 Standard Range', cap: 55.0, ac: 11,
+      curve: [[0,20],[2,44],[4,68],[6,92],[8,116],[10,140],[20,140],[21,125],[30,125],[31,108],[40,96],[50,82],[60,68],[70,54],[80,41],[88,20],[92,9],[96,5],[100,3]]
+    },
+    b10_lr: {
+      name: 'Leapmotor B10 Long Range', cap: 65.0, ac: 11,
+      curve: [[0,20],[2,50],[4,79],[6,109],[8,138],[10,168],[20,168],[21,150],[30,150],[31,130],[40,116],[50,100],[60,82],[70,64],[80,49],[90,28],[94,17],[97,10],[100,7]]
+    },
+    raval_85: {
+      name: 'Cupra Raval 85 kW', cap: 37.0, ac: 11,
+      note: 'Unsichere Datenlage: Quellen nennen für die 85-kW-Version max. 50 kW DC, die Ladekurve ist eine grobe Schätzung.',
+      curve: [[0,40],[10,50],[30,50],[50,42],[70,32],[80,26],[90,18],[100,10]]
+    },
+    raval_99: {
+      name: 'Cupra Raval Plus 99 kW', cap: 37.0, ac: 11,
+      curve: [[0,88],[22,88],[27,86],[29,85],[37,82],[41,80],[55,68],[65,56],[75,46],[80,40],[84,37],[95,12],[100,10]]
+    },
+    raval_52: {
+      name: 'Cupra Raval 52 kWh', cap: 52.0, ac: 11,
+      note: 'Hersteller nennt 105 kW DC max.; die Kurve basiert auf geschätzten Daten (EVKX) und ist näherungsweise.',
+      curve: [[0,60],[10,105],[21,105],[22,104],[29,100],[31,100],[49,90],[59,82],[61,80],[73,67],[74,66],[90,37],[94,14],[97,8],[100,5]]
+    }
+  };
+
+  // Typische Kurvenform (Faktor auf DC-Spitzenleistung) für "Eigenes Fahrzeug"
+  const GENERIC_SHAPE = [[0,0.6],[10,1],[30,1],[50,0.8],[70,0.6],[80,0.45],[90,0.28],[100,0.12]];
+
+  function curvePeak(curve){ return Math.max(...curve.map(p => p[1])); }
+
+  function getVehicle(){
+    const id = vehicleEl.value;
+    if(id === 'custom'){
+      const cap = Math.max(5, parseFloat(customCapEl.value) || 60);
+      const ac = Math.max(1, parseFloat(customACEl.value) || 11);
+      const peak = Math.max(20, parseFloat(customDCEl.value) || 100);
+      return { name: 'Eigenes Fahrzeug', cap, ac, curve: GENERIC_SHAPE.map(([s,f]) => [s, f*peak]) };
+    }
+    return VEHICLES[id];
+  }
+
+  function curvePowerAt(curve, soc){
+    if(soc <= curve[0][0]) return curve[0][1];
+    if(soc >= curve[curve.length-1][0]) return curve[curve.length-1][1];
+    for(let i=0;i<curve.length-1;i++){
+      const [s0,p0] = curve[i];
+      const [s1,p1] = curve[i+1];
+      if(soc >= s0 && soc <= s1){
+        const t = (soc - s0) / (s1 - s0);
+        return p0 + t * (p1 - p0);
+      }
+    }
+    return curve[curve.length-1][1];
+  }
+
+  // Integrate charging time from startSoc to targetSoc in 0.5% steps,
+  // capping vehicle curve power at the station's max power, applying losses.
+  function dcChargeTime(veh, startSoc, targetSoc, stationKw, lossPct){
+    if(targetSoc <= startSoc) return {hours:0, energy:0};
+    const curve = veh.curve;
+    const capacity = veh.cap;
+    const step = 0.5;
+    let soc = startSoc;
+    let hours = 0;
+    let energy = 0;
+    while(soc < targetSoc){
+      const next = Math.min(soc + step, targetSoc);
+      const mid = (soc + next) / 2;
+      const vehicleKw = curvePowerAt(curve, mid);
+      const kw = Math.min(vehicleKw, stationKw) * (1 - lossPct/100);
+      const dSoc = next - soc;
+      const dEnergy = capacity * dSoc / 100;
+      if(kw > 0) hours += dEnergy / kw;
+      energy += dEnergy;
+      soc = next;
+    }
+    return {hours, energy};
+  }
+
+  const vehicleEl = document.getElementById('vehicle');
+  const vehNoteEl = document.getElementById('vehNote');
+  const customField = document.getElementById('customField');
+  const customCapEl = document.getElementById('customCap');
+  const customACEl = document.getElementById('customAC');
+  const customDCEl = document.getElementById('customDC');
+  const wallboxEl = document.getElementById('wallbox');
+  const dcStationEl = document.getElementById('dcStation');
+  const socEl = document.getElementById('soc');
+  const effEl = document.getElementById('eff');
+  const priceEl = document.getElementById('price');
+  const baseFeeEl = document.getElementById('baseFee');
+  const blockFeeEl = document.getElementById('blockFee');
+  const blockFreeEl = document.getElementById('blockFree');
+  const blockFreeField = document.getElementById('blockFreeField');
+  const capHintAC = document.getElementById('capHintAC');
+  const capHintDC = document.getElementById('capHintDC');
+  const effPowerEl = document.getElementById('effPower');
+  const summaryLabel = document.getElementById('summaryLabel');
+  const resultBody = document.getElementById('resultBody');
+  const acField = document.getElementById('acField');
+  const dcField = document.getElementById('dcField');
+  const btnAC = document.getElementById('btnAC');
+  const btnDC = document.getElementById('btnDC');
+  const modeLabel = document.getElementById('modeLabel');
+  const note = document.getElementById('note');
+
+  function formatEuro(v){
+    return v.toLocaleString('de-DE', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €';
+  }
+
+  // Returns {total, blockingPart} in euros for a given energy (kWh) and duration (hours)
+  function calcCost(energyKwh, hours){
+    const priceCt = Math.max(0, parseFloat(priceEl.value) || 0);
+    const baseFee = Math.max(0, parseFloat(baseFeeEl.value) || 0);
+    const blockCt = Math.max(0, parseFloat(blockFeeEl.value) || 0);
+    const blockFreeMin = Math.max(0, parseFloat(blockFreeEl.value) || 0);
+
+    const energyCost = energyKwh * priceCt / 100;
+    const durationMin = hours * 60;
+    const billableBlockMin = blockCt > 0 ? Math.max(0, durationMin - blockFreeMin) : 0;
+    const blockCost = billableBlockMin * blockCt / 100;
+
+    return { total: energyCost + baseFee + blockCost, blockCost, energyCost, baseFee };
+  }
+
+  let mode = 'ac';
+
+  function setMode(newMode){
+    mode = newMode;
+    btnAC.classList.toggle('active', mode === 'ac');
+    btnDC.classList.toggle('active', mode === 'dc');
+    acField.style.display = mode === 'ac' ? 'block' : 'none';
+    dcField.style.display = mode === 'dc' ? 'block' : 'none';
+    blockFreeField.style.display = mode === 'dc' ? 'block' : 'none';
+    modeLabel.innerHTML = mode === 'ac' ? 'AC-Laden<br>Wallbox' : 'DC-Laden<br>Schnellladesäule';
+    effEl.value = mode === 'ac' ? 8 : 4;
+    summaryLabel.textContent = mode === 'ac' ? 'Effektive Ladeleistung' : 'Ø Ladeleistung bis 80 %';
+    render();
+  }
+
+  btnAC.addEventListener('click', () => setMode('ac'));
+  btnDC.addEventListener('click', () => setMode('dc'));
+
+  function formatDuration(hours){
+    if(hours <= 0) return '0 min';
+    const totalMin = Math.round(hours * 60);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    if(h === 0) return `${m} min`;
+    if(m === 0) return `${h} h`;
+    return `${h} h ${m} min`;
+  }
+
+  function render(){
+    const veh = getVehicle();
+    const capacity = veh.cap;
+    const soc = Math.min(100, Math.max(0, parseFloat(socEl.value) || 0));
+    const lossPct = Math.min(30, Math.max(0, parseFloat(effEl.value) || 0));
+    const targets = [70, 80, 90, 100];
+
+    resultBody.innerHTML = '';
+
+    customField.style.display = vehicleEl.value === 'custom' ? 'block' : 'none';
+    vehNoteEl.innerHTML = veh.note ? `<span class="capped">${veh.note}</span>` : '';
+    const peak = curvePeak(veh.curve);
+
+    if(mode === 'ac'){
+      const wallboxKw = parseFloat(wallboxEl.value);
+      const effectiveKw = Math.min(wallboxKw, veh.ac);
+      const chargeKw = effectiveKw * (1 - lossPct / 100);
+
+      capHintAC.innerHTML = wallboxKw > veh.ac
+        ? `<span class="capped">Fahrzeug lädt AC max. mit ${veh.ac} kW — Ladesäulenleistung wird nicht voll genutzt.</span>`
+        : '';
+
+      effPowerEl.textContent = `${chargeKw.toFixed(1)} kW`;
+      note.innerHTML = `Der Onboard-Lader begrenzt AC-Laden beim ${veh.name} auf ${veh.ac} kW — an stärkeren Ladesäulen wird nicht schneller geladen. Ladeverluste sind Schätzwerte.`;
+
+      targets.forEach(target => {
+        const tr = document.createElement('tr');
+        const deltaSoc = Math.max(0, target - soc);
+        const energyKwh = capacity * deltaSoc / 100;
+        const hours = chargeKw > 0 ? energyKwh / chargeKw : 0;
+        if(deltaSoc === 0) tr.classList.add('done');
+        const cost = calcCost(energyKwh, hours);
+        tr.innerHTML = `
+          <td class="target">${target}%</td>
+          <td class="energy">${deltaSoc === 0 ? 'bereits erreicht' : energyKwh.toFixed(1) + ' kWh'}
+            <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100,(soc/target)*100).toFixed(0)}%"></div></div>
+          </td>
+          <td class="num duration">${deltaSoc === 0 ? '—' : formatDuration(hours)}</td>
+          <td class="num cost">${deltaSoc === 0 ? '—' : formatEuro(cost.total)}</td>
+        `;
+        resultBody.appendChild(tr);
+      });
+
+    } else {
+      const stationKw = parseFloat(dcStationEl.value);
+      const carPeak = Math.round(peak);
+
+      capHintDC.innerHTML = stationKw > carPeak
+        ? `<span class="capped">Fahrzeug lädt DC max. mit ${carPeak} kW — Ladesäulenleistung wird nicht voll genutzt.</span>`
+        : (stationKw < carPeak ? `<span class="hint">Ladesäule begrenzt die Ladekurve nach unten (Fahrzeugmaximum: ${carPeak} kW).</span>` : '');
+
+      const ref = dcChargeTime(veh, soc, Math.max(soc,80), stationKw, lossPct);
+      const refEnergy = ref.energy;
+      effPowerEl.textContent = refEnergy > 0 ? `${(refEnergy / ref.hours).toFixed(0)} kW` : '–';
+      note.innerHTML = `Die DC-Ladeleistung folgt einer Ladekurve und ist nicht konstant: Beim ${veh.name} liegt die Spitze bei ${carPeak} kW, danach fällt sie mit steigendem Ladestand ab. Die Kurven stammen aus veröffentlichten bzw. geschätzten Messdaten und sind näherungsweise — reale Werte hängen von Akkutemperatur und Ladesäule ab.`;
+
+      targets.forEach(target => {
+        const tr = document.createElement('tr');
+        const deltaSoc = Math.max(0, target - soc);
+        const {hours, energy} = dcChargeTime(veh, soc, target, stationKw, lossPct);
+        if(deltaSoc === 0) tr.classList.add('done');
+        const cost = calcCost(energy, hours);
+        const blockNote = cost.blockCost > 0 ? `<span class="block">davon ${formatEuro(cost.blockCost)} Blockiergebühr</span>` : '';
+        tr.innerHTML = `
+          <td class="target">${target}%</td>
+          <td class="energy">${deltaSoc === 0 ? 'bereits erreicht' : energy.toFixed(1) + ' kWh'}
+            <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100,(soc/target)*100).toFixed(0)}%"></div></div>
+          </td>
+          <td class="num duration">${deltaSoc === 0 ? '—' : formatDuration(hours)}</td>
+          <td class="num cost">${deltaSoc === 0 ? '—' : formatEuro(cost.total)}${deltaSoc === 0 ? '' : blockNote}</td>
+        `;
+        resultBody.appendChild(tr);
+      });
+    }
+  }
+
+  [vehicleEl, customCapEl, customACEl, customDCEl, wallboxEl, dcStationEl, socEl, effEl, priceEl, baseFeeEl, blockFeeEl, blockFreeEl].forEach(el => el.addEventListener('input', render));
+  setMode('ac');
+</script>
+</body>
+</html>
